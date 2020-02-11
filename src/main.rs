@@ -13,7 +13,7 @@ use rayon::prelude::*;
 
 
 
-fn get_color(count: usize, palette: u8) -> Vec<u8> {
+fn get_color(count: Option<usize>, palette: u8) -> Vec<u8> {
     let palette1 = vec![
         vec![0x18, 0x4d, 0x68, 255],
         vec![0x31, 0x80, 0x9f, 255],
@@ -41,28 +41,31 @@ fn get_color(count: usize, palette: u8) -> Vec<u8> {
         vec![0xff, 0xf0, 0xf2, 255],
     ];
 
-    if count == 0 {
-        return match palette {
+    match count {
+        None => match palette {
             1 => palette1[0].clone(),
             2 => palette2[0].clone(),
             _  => palette1[0].clone()
+        },
+        Some(count) => {
+            match palette {
+                1 => {
+                    match count {
+                        0 => palette1[5].clone(),
+                        1..=50 => palette1[4].clone(),
+                        51..=100 => palette1[3].clone(),
+                        101..=150 => palette1[2].clone(),
+                        _ => palette1[1].clone()
+                    }
+                    // palette1[ 5- (count) *5/LIMIT as usize].clone()
+                },
+                2 => palette2[13 - (count)* 13/LIMIT as usize].clone(),
+                _ => palette1[count % 6].clone()
+            }
         }
     }
-    match palette {
-        1 => {
-            match count {
-                0 => palette1[0].clone(),
-                1..=10 => palette1[4].clone(),
-                11..=50 => palette1[4].clone(),
-                51..=200 => palette1[3].clone(),
-                201..=220 => palette1[2].clone(),
-                _ => palette1[1].clone()
-            }
-            // palette1[ 5- (count) *5/LIMIT as usize].clone()
-        },
-        2 => palette2[13 - (count)* 13/LIMIT as usize].clone(),
-        _ => palette1[count % 6].clone()
-    }
+
+
 
 }
 
@@ -165,7 +168,7 @@ impl event::EventHandler for MainState {
     }
 }
 
-fn compute_mandel(x: f64, y: f64, iterations: f64) -> usize {
+fn compute_mandel(x: f64, y: f64, iterations: f64) -> Option<usize> {
     let (mut z, mut c) = (x, y);
     let mut fc;
     let mut pc;
@@ -175,10 +178,10 @@ fn compute_mandel(x: f64, y: f64, iterations: f64) -> usize {
         z = fc;
         c = pc;
         if z*z * c*c > 4. {
-            return i as usize;
+            return Some(i as usize);
         }
     }
-    0
+    None
 }
 
 pub fn main() -> GameResult {
