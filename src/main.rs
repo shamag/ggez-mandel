@@ -7,13 +7,13 @@ use ggez::event;
 use ggez::graphics;
 use ggez::timer;
 use ggez::nalgebra as na;
-use ggez::{conf::*, Context, GameResult};
+use ggez::{conf::*, Context, GameResult, mint,  graphics::*};
 use constants::*;
 use rayon::prelude::*;
 
 
 
-fn get_color(count: Option<usize>, palette: u8) -> Vec<u8> {
+fn get_color(count: &Option<usize>, palette: u8) -> Vec<u8> {
     let palette1 = vec![
         vec![0x18, 0x4d, 0x68, 255],
         vec![0x31, 0x80, 0x9f, 255],
@@ -51,15 +51,19 @@ fn get_color(count: Option<usize>, palette: u8) -> Vec<u8> {
             match palette {
                 1 => {
                     match count {
-                        0 => palette1[5].clone(),
-                        1..=50 => palette1[4].clone(),
-                        51..=100 => palette1[3].clone(),
+                        0..=2 => palette1[5].clone(),
+                        3..=5 => palette1[4].clone(),
+                        6..=100 => palette1[3].clone(),
                         101..=150 => palette1[2].clone(),
                         _ => palette1[1].clone()
                     }
                     // palette1[ 5- (count) *5/LIMIT as usize].clone()
                 },
-                2 => palette2[13 - (count)* 13/LIMIT as usize].clone(),
+                2 => {
+                    let x = (*count as f64/LIMIT as f64);
+                    let tr = x * 14.0 + 1.0;
+                    palette2[tr as usize].clone()
+                },
                 _ => palette1[count % 6].clone()
             }
         }
@@ -124,30 +128,45 @@ impl event::EventHandler for MainState {
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, [0.1, 0.2, 0.3, 1.0].into());
-
-//        let circle = graphics::Image::solid(
-//            ctx,
-//            constants::WIDTH,
-//            [0.5, 0.7, 0.6, 1.0].into(),
-//        )?;
+        let ratio = WINDOW_WIDTH as f64 / WINDOW_HEIGHT as f64;
         let zoom = ZOOM;
         let center_x = FRACTAL_CENTER_X;
-        let center_y = FRACTAL_CENTER_Y;
+        let center_y = 0.0- FRACTAL_CENTER_Y;
         let min_x = center_x - (zoom / 2.0);
-        let min_y = center_y - (zoom / 2.0);
+        let min_y = center_y - (zoom / 2.0 / ratio);
         let iterations = LIMIT;
         if !self.fractal_rendered {
-            let buffer = (0..(constants::WINDOW_WIDTH  * constants::WINDOW_HEIGHT ) as usize).into_par_iter().map(|idx| {
-                let x = idx % constants::WINDOW_WIDTH as usize;
-                let y = idx / constants::WINDOW_HEIGHT as usize;
+            let colors = (0..(constants::WINDOW_WIDTH  * constants::WINDOW_HEIGHT) as usize).into_par_iter().map(|idx| {
+                let x = idx % (constants::WINDOW_WIDTH as usize );
+                let y = idx / (constants::WINDOW_WIDTH as usize);
                 let is_in_set = compute_mandel(
                     min_x + x as f64 / constants::WINDOW_WIDTH as f64 * zoom,
-                    min_y + y as f64 / constants::WINDOW_HEIGHT as f64 * zoom,
+                    min_y + y as f64 / constants::WINDOW_HEIGHT as f64 * zoom / ratio,
                     iterations,
                 );
                 is_in_set
-            }).flat_map(|item| {
-                get_color(item, 1)
+            }).collect::<Vec<Option<usize>>>();
+            let mut max = 0 as usize;
+            let mut min = std::usize::MAX;
+
+            colors.iter().for_each(|color| {
+                match color {
+                    None => {},
+                    Some(num) => {
+                        if *num > max {
+                            max = *num;
+                        }
+                        if *num < min {
+                            min = *num;
+                        }
+                    }
+                }
+
+            });
+            println!("{}, {}", min, max);
+
+            let buffer= colors.iter().flat_map(|item| {
+                get_color(item, 2)
                 // vec![0, 0, 255, if item == 0.0 { 0 } else { (item * 255.0) as u8 }]
             }).collect::<Vec<u8>>();
 
@@ -161,7 +180,9 @@ impl event::EventHandler for MainState {
             //&buffer
             &self.fractal_buffer
         ).unwrap();
-        graphics::draw(ctx, &fractal, (na::Point2::new(0.0, 0.0),))?;
+        let scale: mint::Vector2<f32> = mint::Vector2 { x: 1.0, y: 1.0};
+        let point: na::Point2<f32> = na::Point2::new(0.0, 0.0);
+        graphics::draw(ctx, &fractal, DrawParam::default().scale(scale).dest(point))?;
 
         graphics::present(ctx)?;
         Ok(())
