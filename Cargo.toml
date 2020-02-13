@@ -1,5 +1,5 @@
 [package]
-name = "ggez-mandel"
+name = "ggez_mandel"
 version = "0.1.0"
 authors = ["Andrey <otbacmhe@gmail.com>"]
 edition = "2018"
@@ -9,3 +9,12 @@ edition = "2018"
 [dependencies]
 ggez = "*"
 rayon = "*"
+num = "*"
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "my_benchmark"
+harness = false
+path = "./src/my_benchmark.rs"

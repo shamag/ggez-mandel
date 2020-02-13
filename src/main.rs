@@ -1,6 +1,6 @@
 //! The simplest possible example that does something.
 mod constants;
-
+mod lib;
 
 use ggez;
 use ggez::event;
@@ -10,6 +10,10 @@ use ggez::nalgebra as na;
 use ggez::{conf::*, Context, GameResult, mint,  graphics::*};
 use constants::*;
 use rayon::prelude::*;
+use num::Complex;
+use lib::escapes;
+
+
 
 
 
@@ -60,7 +64,7 @@ fn get_color(count: &Option<usize>, palette: u8) -> Vec<u8> {
                     // palette1[ 5- (count) *5/LIMIT as usize].clone()
                 },
                 2 => {
-                    let x = (*count as f64/LIMIT as f64);
+                    let x = *count as f64/LIMIT as f64;
                     let tr = x * 14.0 + 1.0;
                     palette2[tr as usize].clone()
                 },
@@ -71,37 +75,6 @@ fn get_color(count: &Option<usize>, palette: u8) -> Vec<u8> {
 
 
 
-}
-
-struct PixelBuffer {
-    buffer: Option<Vec<u8>>,
-    row_length: usize,
-}
-
-#[allow(dead_code)]
-impl PixelBuffer {
-    pub fn new(width: usize, height: usize) -> PixelBuffer {
-        let blank_pix = vec![0, 0, 0, 255];
-        let mut buffer = Vec::with_capacity((width * height * 4) as usize);
-        for _ in 0..height as usize {
-            for _ in 0..width as usize {
-                buffer.append(&mut blank_pix.clone());
-            }
-        }
-
-        PixelBuffer {
-            buffer: Some(buffer),
-            row_length: width,
-
-        }
-    }
-    pub fn get_raw(&self) -> &Vec<u8> {
-        &self.buffer.as_ref().unwrap()
-    }
-    pub fn set (&mut self, data: &mut Vec<u8>) {
-    let mut buffer = self.buffer.as_mut().unwrap();
-        buffer = data;
-    }
 }
 
 struct MainState {
@@ -136,16 +109,18 @@ impl event::EventHandler for MainState {
         let min_y = center_y - (zoom / 2.0 / ratio);
         let iterations = LIMIT;
         if !self.fractal_rendered {
-            let colors = (0..(constants::WINDOW_WIDTH  * constants::WINDOW_HEIGHT) as usize).into_par_iter().map(|idx| {
-                let x = idx % (constants::WINDOW_WIDTH as usize );
-                let y = idx / (constants::WINDOW_WIDTH as usize);
-                let is_in_set = compute_mandel(
-                    min_x + x as f64 / constants::WINDOW_WIDTH as f64 * zoom,
-                    min_y + y as f64 / constants::WINDOW_HEIGHT as f64 * zoom / ratio,
-                    iterations,
-                );
-                is_in_set
-            }).collect::<Vec<Option<usize>>>();
+            let colors = (0..(constants::WINDOW_WIDTH  * constants::WINDOW_HEIGHT) as usize)
+                .into_par_iter()
+                .map(|idx| {
+                    let x = idx % (constants::WINDOW_WIDTH as usize );
+                    let y = idx / (constants::WINDOW_WIDTH as usize);
+                    let point = Complex{re: min_x + x as f64 / constants::WINDOW_WIDTH as f64 * zoom, im: min_y + y as f64 / constants::WINDOW_HEIGHT as f64 * zoom / ratio};
+                    escapes(
+                        point,
+                        iterations as u32,
+                    )
+                })
+                .collect::<Vec<Option<usize>>>();
             let mut max = 0 as usize;
             let mut min = std::usize::MAX;
 
@@ -167,7 +142,6 @@ impl event::EventHandler for MainState {
 
             let buffer= colors.iter().flat_map(|item| {
                 get_color(item, 2)
-                // vec![0, 0, 255, if item == 0.0 { 0 } else { (item * 255.0) as u8 }]
             }).collect::<Vec<u8>>();
 
             self.fractal_buffer = buffer;
@@ -189,21 +163,6 @@ impl event::EventHandler for MainState {
     }
 }
 
-fn compute_mandel(x: f64, y: f64, iterations: f64) -> Option<usize> {
-    let (mut z, mut c) = (x, y);
-    let mut fc;
-    let mut pc;
-    for i in 0..iterations as i32 {
-        fc = z * z - c * c + x;
-        pc = 2.0 * z * c + y;
-        z = fc;
-        c = pc;
-        if z*z * c*c > 4. {
-            return Some(i as usize);
-        }
-    }
-    None
-}
 
 pub fn main() -> GameResult {
     let app_config = ggez::conf::Conf {
@@ -231,3 +190,5 @@ pub fn main() -> GameResult {
     let state = &mut MainState::new()?;
     event::run(ctx, event_loop, state)
 }
+
+
