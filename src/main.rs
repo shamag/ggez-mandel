@@ -139,7 +139,7 @@ impl event::EventHandler for MainState {
             let xr = std::ops::Range{start: FRACTAL_CENTER_X - width, end: FRACTAL_CENTER_X + width};
             let yr = std::ops::Range{start: FRACTAL_CENTER_Y - height, end: FRACTAL_CENTER_Y + height};
             // let colors = generate(dims, xr, yr, iterations as usize);
-            let colors = opencl::generate(WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize).unwrap();
+            let colors = opencl::generate(WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize, self.limit as usize).unwrap();
 //            let colors = (0..(WINDOW_WIDTH  * WINDOW_HEIGHT) as usize)
 //                .into_par_iter()
 //                .map(|idx| {

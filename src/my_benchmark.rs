@@ -1,6 +1,7 @@
 
 mod lib;
 mod constants;
+mod opencl;
 
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Fun};
@@ -37,15 +38,22 @@ fn test_escape_simd () {
     let dims = (2000, 2000);
     let xr = std::ops::Range{start: -1.0, end: 0.5};
     let yr = std::ops::Range{start: -1.0, end: 1.0};
-    let _result = generate(dims, xr, yr, 100);
+    let _result = generate(dims, xr, yr, 1500);
 }
 
-fn test_escape_simd_iter () {
+fn test_escape_opencl () {
     let dims = (2000, 2000);
     let xr = std::ops::Range{start: -1.0, end: 0.5};
     let yr = std::ops::Range{start: -1.0, end: 1.0};
-    let _result = simd_par::generate(dims, xr, yr);
+    let _result = opencl::generate(dims.0, dims.1, 1500);
 }
+
+//fn test_escape_simd_iter () {
+//    let dims = (2000, 2000);
+//    let xr = std::ops::Range{start: -2.0, end: 1.25};
+//    let yr = std::ops::Range{start: -1.25, end: 1.25};
+//    let _result = simd_par::generate(dims, xr, yr);
+//}
 
 fn test_escape_no_complex () {
     let ratio = 1.0;
@@ -77,7 +85,7 @@ fn test_escape_single () {
     let center_y = 0.0;
     let min_x = center_x - (zoom / 2.0);
     let min_y = center_y - (zoom / 2.0 / ratio);
-    let iterations = 500;
+    let iterations = 100;
     let colors = (0..(2000 * 2000) as usize)
         .map(|idx| {
             let x = idx % (2000 as usize );
@@ -95,8 +103,9 @@ fn compare_escapes(c: &mut Criterion) {
     //let mand_slow = Fun::new("no_complex", |b,_i| b.iter(|| test_escape_no_complex()));
     let mand_par = Fun::new("par", |b, _i| b.iter(|| test_escape()));
     let mand_simd = Fun::new("simd", |b, _i| b.iter(|| test_escape_simd()));
+    let mand_opencl = Fun::new("opencl", |b, _i| b.iter(|| test_escape_opencl()));
 
-    let functions = vec![mand_par, mand_simd, mand_simd_iter];
+    let functions = vec![mand_par, mand_simd, mand_opencl];
 
     c.bench_functions("Mandelbrot", functions, 20);
 }

@@ -1,8 +1,8 @@
 extern crate ocl;
 use ocl::ProQue;
-use ocl::SpatialDims;
+use ocl::{SpatialDims, Device, Context, Platform, Program};
 
-pub fn generate(width: usize, height: usize) -> ocl::Result<Vec<u64>> {
+pub fn generate(width: usize, height: usize, limit: usize) -> ocl::Result<Vec<u64>> {
     let src = r#"
        // Used to index into the 1D array, so that we can use
 // it effectively as a 2D array
@@ -22,7 +22,7 @@ float mapY(float y) {
   return y*2.5 - 1.25;
 }
 
-__kernel void render(__global size_t *out) {
+__kernel void render(__global size_t *out, int limit) {
   int x_dim = get_global_id(0);
   int y_dim = get_global_id(1);
   size_t width = get_global_size(0);
@@ -40,7 +40,7 @@ __kernel void render(__global size_t *out) {
   int iteration = 0;
 
   // This can be changed, to be more or less precise
-  int max_iteration = 256;
+  int max_iteration = limit;
   while(x*x + y*y <= 4 && iteration < max_iteration) {
     float xtemp = x*x - y*y + x_origin;
     y = 2*x*y + y_origin;
@@ -59,8 +59,30 @@ __kernel void render(__global size_t *out) {
 
 }
     "#;
+    let platform = Platform::default();
+
+//    println!("Choosing device...");
+//    println!("{}",platform.name().unwrap());
+
+    let device = Device::first(platform)?;
+//    println!("{}",device.name().unwrap());
+//
+//    println!("Creating context...");
+
+
+
+    let context = Context::builder()
+        .platform(platform)
+        .devices(device.clone())
+        .build().unwrap();
+
+    let program = Program::builder()
+        .devices(device)
+        .src(src)
+        .build(&context).unwrap();
 
     let pro_que = ProQue::builder()
+        .device(device)
         .src(src)
         .dims(width*height)
         .build()?;
@@ -69,6 +91,7 @@ __kernel void render(__global size_t *out) {
 
     let mut kernel = pro_que.kernel_builder("render")
         .arg(&buffer)
+        .arg(limit as i32)
         .build()?;
 
     kernel.set_default_global_work_size(SpatialDims::Two(width,height));
@@ -78,7 +101,6 @@ __kernel void render(__global size_t *out) {
     let mut vec = vec![0u64; buffer.len()];
     buffer.read(&mut vec).enq()?;
 
-    println!("The value at index [{}] is now '{}'!", 22, vec[1]);
     let max = vec.iter().max();
     Ok(vec)
 }
@@ -87,6 +109,6 @@ mod test {
     use super::*;
     #[test]
     fn test_add() {
-        assert_eq!(generate(300, 300).expect("error"), vec![1,1]);
+        assert_eq!(generate(300, 300, 100).expect("error"), vec![1,1]);
     }
 }
