@@ -11,6 +11,8 @@ ggez = "*"
 rayon = "*"
 num = "*"
 GSL = "1.1"
+packed_simd = "*"
+ocl = "*"
 
 [dev-dependencies]
 criterion = "0.3"
@@ -19,3 +21,11 @@ criterion = "0.3"
 name = "my_benchmark"
 harness = false
 path = "./src/my_benchmark.rs"
+
+[target.'cfg(target_arch = "x86_64")'.dependencies.sleef-sys]
+version = "^0.1.2"
+optional = true
+
+[features]
+default = [ "256bit" ]
+256bit = []

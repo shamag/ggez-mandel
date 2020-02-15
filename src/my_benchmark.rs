@@ -6,8 +6,9 @@ mod constants;
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Fun};
 use constants::*;
 use rayon::prelude::*;
+use std::{ops};
 use num::Complex;
-use lib::{escapes, compute_mandel};
+use lib::{escapes, compute_mandel, generate};
 
 
 fn test_escape () {
@@ -17,7 +18,7 @@ fn test_escape () {
     let center_y = 0.0;
     let min_x = center_x - (zoom / 2.0);
     let min_y = center_y - (zoom / 2.0 / ratio);
-    let iterations = 500;
+    let iterations = 100;
     let colors = (0..(2000 * 2000) as usize)
         .into_par_iter()
         .map(|idx| {
@@ -32,6 +33,20 @@ fn test_escape () {
         .collect::<Vec<Option<usize>>>();
 }
 
+fn test_escape_simd () {
+    let dims = (2000, 2000);
+    let xr = std::ops::Range{start: -1.0, end: 0.5};
+    let yr = std::ops::Range{start: -1.0, end: 1.0};
+    let _result = generate(dims, xr, yr, 100);
+}
+
+fn test_escape_simd_iter () {
+    let dims = (2000, 2000);
+    let xr = std::ops::Range{start: -1.0, end: 0.5};
+    let yr = std::ops::Range{start: -1.0, end: 1.0};
+    let _result = simd_par::generate(dims, xr, yr);
+}
+
 fn test_escape_no_complex () {
     let ratio = 1.0;
     let zoom = 1.0;
@@ -39,7 +54,7 @@ fn test_escape_no_complex () {
     let center_y = 0.0;
     let min_x = center_x - (zoom / 2.0);
     let min_y = center_y - (zoom / 2.0 / ratio);
-    let iterations = 500;
+    let iterations = 100;
     let colors = (0..(2000 * 2000) as usize)
         .into_par_iter()
         .map(|idx| {
@@ -77,12 +92,13 @@ fn test_escape_single () {
 }
 
 fn compare_escapes(c: &mut Criterion) {
-    let fib_slow = Fun::new("no_complex", |b,_i| b.iter(|| test_escape_no_complex()));
-    let fib_fast = Fun::new("complex", |b, _i| b.iter(|| test_escape()));
+    //let mand_slow = Fun::new("no_complex", |b,_i| b.iter(|| test_escape_no_complex()));
+    let mand_par = Fun::new("par", |b, _i| b.iter(|| test_escape()));
+    let mand_simd = Fun::new("simd", |b, _i| b.iter(|| test_escape_simd()));
 
-    let functions = vec![fib_slow, fib_fast];
+    let functions = vec![mand_par, mand_simd, mand_simd_iter];
 
-    c.bench_functions("Fibonacci", functions, 20);
+    c.bench_functions("Mandelbrot", functions, 20);
 }
 
 pub fn criterion_benchmark(c: &mut Criterion) {

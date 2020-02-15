@@ -1,6 +1,7 @@
 //! The simplest possible example that does something.
 mod constants;
 mod lib;
+mod opencl;
 
 use rgsl;
 use ggez;
@@ -12,7 +13,7 @@ use ggez::{conf::*, Context, GameResult, mint,  graphics::*, event::*};
 use constants::*;
 use rayon::prelude::*;
 use num::Complex;
-use lib::escapes;
+use lib::{escapes, generate};
 use rgsl::{Spline, InterpAccel};
 
 struct Splines {
@@ -125,28 +126,38 @@ impl event::EventHandler for MainState {
         let ratio = WINDOW_WIDTH as f64 / WINDOW_HEIGHT as f64;
         let zoom = self.zoom;
         let center_x = FRACTAL_CENTER_X;
-        let center_y = 0.0- FRACTAL_CENTER_Y;
+        let center_y = 0.0 - FRACTAL_CENTER_Y;
+        let width = zoom /2.0;
+        let mut height = zoom /2.0/ratio;
+        height = height;
         let min_x = center_x - (zoom / 2.0);
         let min_y = center_y - (zoom / 2.0 / ratio);
+        let max_y = center_y + (zoom / 2.0 / ratio);
         let iterations = self.limit;
         if !self.fractal_rendered {
-            let colors = (0..(WINDOW_WIDTH  * WINDOW_HEIGHT) as usize)
-                .into_par_iter()
-                .map(|idx| {
-                    let x = idx % (WINDOW_WIDTH as usize );
-                    let y = idx / (WINDOW_WIDTH as usize);
-                    let point = Complex{re: min_x + x as f64 / WINDOW_WIDTH as f64 * zoom, im: min_y + y as f64 / WINDOW_HEIGHT as f64 * zoom / ratio};
-                    escapes(
-                        point,
-                        iterations as u32,
-                    )
-                })
-                .collect::<Vec<Option<usize>>>();
-            let mut max = 0 as usize;
-            let mut min = std::usize::MAX;
+            let dims = (WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize);
+            let xr = std::ops::Range{start: FRACTAL_CENTER_X - width, end: FRACTAL_CENTER_X + width};
+            let yr = std::ops::Range{start: FRACTAL_CENTER_Y - height, end: FRACTAL_CENTER_Y + height};
+            // let colors = generate(dims, xr, yr, iterations as usize);
+            let colors = opencl::generate(WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize).unwrap();
+//            let colors = (0..(WINDOW_WIDTH  * WINDOW_HEIGHT) as usize)
+//                .into_par_iter()
+//                .map(|idx| {
+//                    let x = idx % (WINDOW_WIDTH as usize );
+//                    let y = idx / (WINDOW_WIDTH as usize);
+//                    let point = Complex{re: min_x + x as f64 / WINDOW_WIDTH as f64 * zoom, im: min_y + y as f64 / WINDOW_HEIGHT as f64 * zoom / ratio};
+//                    escapes(
+//                        point,
+//                        iterations as u32,
+//                    )
+//                })
+//                .collect::<Vec<Option<usize>>>();
+            let mut max = 0 as u64;
+            let mut min = std::u64::MAX;
 
             colors.iter().for_each(|color| {
-                match color {
+                let wrapped = Some(color);
+                match wrapped {
                     None => {},
                     Some(num) => {
                         if *num > max {
@@ -162,7 +173,14 @@ impl event::EventHandler for MainState {
             println!("{}, {}", min, max);
 
             let buffer= colors.iter().flat_map(|item| {
-                self.get_color(item)
+                let max_iter = (iterations -1.0) as u64;
+                let mut wrapped = if *item < (iterations-1.0) as u64{
+                    Some(*item as usize)
+                } else {
+                    None
+                };
+
+                self.get_color(&wrapped)
             }).collect::<Vec<u8>>();
 
             self.fractal_buffer = buffer;
