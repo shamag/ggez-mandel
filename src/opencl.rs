@@ -1,9 +1,17 @@
 extern crate ocl;
 use ocl::ProQue;
-use ocl::{SpatialDims, Device, Context, Platform, Program};
+use ocl::{SpatialDims, Device, Context, Platform, Program, Buffer};
 
-pub fn generate(width: usize, height: usize, limit: usize) -> ocl::Result<Vec<u64>> {
-    let src = r#"
+pub struct OCLMandelbrot{
+    queue: ProQue,
+    buffer: Buffer<u64>,
+    dims: (usize, usize)
+}
+impl OCLMandelbrot{
+     pub fn new(dims: (usize, usize)) -> OCLMandelbrot {
+         let platform = Platform::default();
+         let device = Device::first(platform).unwrap();
+         let src = r#"
        // Used to index into the 1D array, so that we can use
 // it effectively as a 2D array
 int index(int x, int y, int width) {
@@ -50,7 +58,7 @@ __kernel void render(__global size_t *out, int limit) {
 
   if(iteration == max_iteration) {
     // This coordinate did not escape, so it is in the Mandelbrot set
-    out[idx] = 255;
+    out[idx] = max_iteration;
   } else {
     // This coordinate did escape, so color based on quickly it escaped
     out[idx] = iteration;
@@ -59,56 +67,58 @@ __kernel void render(__global size_t *out, int limit) {
 
 }
     "#;
-    let platform = Platform::default();
-
-//    println!("Choosing device...");
-//    println!("{}",platform.name().unwrap());
-
-    let device = Device::first(platform)?;
-//    println!("{}",device.name().unwrap());
-//
-//    println!("Creating context...");
 
 
+        let context = Context::builder()
+            .platform(platform)
+            .devices(device.clone())
+            .build().unwrap();
 
-    let context = Context::builder()
-        .platform(platform)
-        .devices(device.clone())
-        .build().unwrap();
+        let program = Program::builder()
+            .devices(device)
+            .src(src)
+            .build(&context).unwrap();
 
-    let program = Program::builder()
-        .devices(device)
-        .src(src)
-        .build(&context).unwrap();
+        let pro_que = ProQue::builder()
+            .device(device)
+            .src(src)
+            .dims(dims.0*dims.1)
+            .build().unwrap();
+         let buffer = pro_que.create_buffer::<u64>().unwrap();
+        OCLMandelbrot{
+            queue: pro_que,
+            dims,
+            buffer
+        }
+    }
+    pub fn generate(&self, dims: (usize, usize), xr: std::ops::Range<f64>, yr: std::ops::Range<f64>, limit: usize) -> ocl::Result<Vec<u64>> {
 
-    let pro_que = ProQue::builder()
-        .device(device)
-        .src(src)
-        .dims(width*height)
-        .build()?;
 
-    let buffer = pro_que.create_buffer::<u64>()?;
 
-    let mut kernel = pro_que.kernel_builder("render")
-        .arg(&buffer)
-        .arg(limit as i32)
-        .build()?;
+        let mut kernel = self.queue.kernel_builder("render")
+            .arg(&self.buffer)
+            .arg(limit as i32)
+            .build()?;
 
-    kernel.set_default_global_work_size(SpatialDims::Two(width,height));
+        kernel.set_default_global_work_size(SpatialDims::Two(self.dims.0,self.dims.1));
 
-    unsafe { kernel.enq()?; }
+        unsafe { kernel.enq()?; }
 
-    let mut vec = vec![0u64; buffer.len()];
-    buffer.read(&mut vec).enq()?;
+        let mut vec = vec![0u64; self.buffer.len()];
+        self.buffer.read(&mut vec).enq()?;
 
-    let max = vec.iter().max();
-    Ok(vec)
+        Ok(vec)
+    }
+
 }
+
+
 #[cfg(test)]
 mod test {
     use super::*;
     #[test]
     fn test_add() {
-        assert_eq!(generate(300, 300, 100).expect("error"), vec![1,1]);
+        let renderer= OCLMandelbrot::new((300, 300));
+        assert_eq!(renderer.generate(100).expect("error"), vec![1,1]);
     }
 }

@@ -83,12 +83,24 @@ struct MainState {
     splines: Splines,
     zoom: f64,
     limit: f64,
+    center_x: f64,
+    center_y: f64,
+    render: opencl::OCLMandelbrot
 }
 
 impl MainState {
     fn new() -> GameResult<MainState> {
         let initial_buffer = Vec::with_capacity((WINDOW_WIDTH as usize * WINDOW_HEIGHT as usize * 4) as usize);
-        let s = MainState { fractal_buffer: initial_buffer, fractal_rendered: false, splines:  get_splines(), zoom: ZOOM, limit: LIMIT};
+        let dims = (WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize);
+        let s = MainState {
+            fractal_buffer: initial_buffer,
+            fractal_rendered: false,
+            splines:  get_splines(),
+            zoom: ZOOM, limit: LIMIT,
+            center_x: FRACTAL_CENTER_X,
+            center_y: 0. - FRACTAL_CENTER_Y,
+            render: opencl::OCLMandelbrot::new(dims)
+        };
         Ok(s)
     }
     fn get_color(&mut self, count: &Option<usize>) -> Vec<u8>  {
@@ -125,8 +137,8 @@ impl event::EventHandler for MainState {
         graphics::clear(ctx, [0.0, 0.0, 0.0, 1.0].into());
         let ratio = WINDOW_WIDTH as f64 / WINDOW_HEIGHT as f64;
         let zoom = self.zoom;
-        let center_x = FRACTAL_CENTER_X;
-        let center_y = 0.0 - FRACTAL_CENTER_Y;
+        let center_x = self.center_x;
+        let center_y = self.center_y;
         let width = zoom /2.0;
         let mut height = zoom /2.0/ratio;
         height = height;
@@ -136,10 +148,11 @@ impl event::EventHandler for MainState {
         let iterations = self.limit;
         if !self.fractal_rendered {
             let dims = (WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize);
-            let xr = std::ops::Range{start: FRACTAL_CENTER_X - width, end: FRACTAL_CENTER_X + width};
-            let yr = std::ops::Range{start: FRACTAL_CENTER_Y - height, end: FRACTAL_CENTER_Y + height};
-            // let colors = generate(dims, xr, yr, iterations as usize);
-            let colors = opencl::generate(WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize, self.limit as usize).unwrap();
+            let xr = std::ops::Range{start: self.center_x - width, end: self.center_x + width};
+            let yr = std::ops::Range{start: self.center_y - height, end: self.center_y + height};
+            //let colors = generate(dims, xr, yr, iterations as usize);
+            // let colors = opencl::generate(WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize, self.limit as usize).unwrap();
+            let colors = self.render.generate(dims, xr, yr, self.limit as usize).unwrap();
 //            let colors = (0..(WINDOW_WIDTH  * WINDOW_HEIGHT) as usize)
 //                .into_par_iter()
 //                .map(|idx| {
@@ -215,6 +228,22 @@ impl event::EventHandler for MainState {
         }
         if keycode == KeyCode::V {
             self.limit -= 0.5 * self.limit;
+            self.fractal_rendered = false;
+        }
+        if keycode == KeyCode::A {
+            self.center_x -= 0.1 * self.zoom;
+            self.fractal_rendered = false;
+        }
+        if keycode == KeyCode::D {
+            self.center_x += 0.1 * self.zoom;
+            self.fractal_rendered = false;
+        }
+        if keycode == KeyCode::W {
+            self.center_y -= 0.1 * self.zoom;
+            self.fractal_rendered = false;
+        }
+        if keycode == KeyCode::S {
+            self.center_y += 0.1 * self.zoom;
             self.fractal_rendered = false;
         }
     }

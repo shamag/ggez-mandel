@@ -38,14 +38,11 @@ fn test_escape_simd () {
     let dims = (2000, 2000);
     let xr = std::ops::Range{start: -1.0, end: 0.5};
     let yr = std::ops::Range{start: -1.0, end: 1.0};
-    let _result = generate(dims, xr, yr, 1500);
+    let _result = generate(dims, xr, yr, 500);
 }
 
-fn test_escape_opencl () {
-    let dims = (2000, 2000);
-    let xr = std::ops::Range{start: -1.0, end: 0.5};
-    let yr = std::ops::Range{start: -1.0, end: 1.0};
-    let _result = opencl::generate(dims.0, dims.1, 1500);
+fn test_escape_opencl (renderer: &opencl::OCLMandelbrot, dims: (usize, usize), limit: usize) {
+    let _result = renderer.generate(limit);
 }
 
 //fn test_escape_simd_iter () {
@@ -100,12 +97,17 @@ fn test_escape_single () {
 }
 
 fn compare_escapes(c: &mut Criterion) {
+    let dims = (2000, 2000);
+    let xr = std::ops::Range{start: -1.0, end: 0.5};
+    let yr = std::ops::Range{start: -1.0, end: 1.0};
+    let renderer= opencl::OCLMandelbrot::new(dims);
     //let mand_slow = Fun::new("no_complex", |b,_i| b.iter(|| test_escape_no_complex()));
-    let mand_par = Fun::new("par", |b, _i| b.iter(|| test_escape()));
+    let mand_opencl = Fun::new("opencl", move |b, _i| b.iter(|| test_escape_opencl(&renderer, dims, 500)));
+    //let mand_par = Fun::new("par", |b, _i| b.iter(|| test_escape()));
     let mand_simd = Fun::new("simd", |b, _i| b.iter(|| test_escape_simd()));
-    let mand_opencl = Fun::new("opencl", |b, _i| b.iter(|| test_escape_opencl()));
 
-    let functions = vec![mand_par, mand_simd, mand_opencl];
+
+    let functions = vec![mand_opencl, mand_simd];
 
     c.bench_functions("Mandelbrot", functions, 20);
 }
