@@ -35,14 +35,16 @@ fn test_escape () {
 }
 
 fn test_escape_simd () {
-    let dims = (2000, 2000);
+    let dims = (1000, 1000);
     let xr = std::ops::Range{start: -1.0, end: 0.5};
     let yr = std::ops::Range{start: -1.0, end: 1.0};
     let _result = generate(dims, xr, yr, 500);
 }
 
 fn test_escape_opencl (renderer: &opencl::OCLMandelbrot, dims: (usize, usize), limit: usize) {
-    let _result = renderer.generate(limit);
+    let xr = std::ops::Range{start: -1.0, end: 0.5};
+    let yr = std::ops::Range{start: -1.0, end: 1.0};
+    let _result = renderer.generate(dims, xr, yr,limit);
 }
 
 //fn test_escape_simd_iter () {
@@ -97,7 +99,7 @@ fn test_escape_single () {
 }
 
 fn compare_escapes(c: &mut Criterion) {
-    let dims = (2000, 2000);
+    let dims = (1000, 1000);
     let xr = std::ops::Range{start: -1.0, end: 0.5};
     let yr = std::ops::Range{start: -1.0, end: 1.0};
     let renderer= opencl::OCLMandelbrot::new(dims);

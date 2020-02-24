@@ -141,6 +141,7 @@ impl event::EventHandler for MainState {
         let center_y = self.center_y;
         let width = zoom /2.0;
         let mut height = zoom /2.0/ratio;
+        //println!("zoom {}", zoom);
         height = height;
         let min_x = center_x - (zoom / 2.0);
         let min_y = center_y - (zoom / 2.0 / ratio);
