@@ -2,6 +2,8 @@
 mod constants;
 mod lib;
 mod opencl;
+mod renderer;
+mod simd;
 
 use rgsl;
 use ggez;
@@ -13,8 +15,11 @@ use ggez::{conf::*, Context, GameResult, mint,  graphics::*, event::*};
 use constants::*;
 use rayon::prelude::*;
 use num::Complex;
-use lib::{escapes, generate};
+//use lib::{escapes, generate};
 use rgsl::{Spline, InterpAccel};
+use renderer::*;
+use crate::simd::SIMDMandelbrot;
+use crate::opencl::OCLMandelbrot;
 
 struct Splines {
     r: Spline,
@@ -23,6 +28,11 @@ struct Splines {
     ra: InterpAccel,
     ga: InterpAccel,
     ba: InterpAccel,
+}
+
+struct renderers {
+    opencl: Box<MandelbrotRenderer>,
+    simd: Box<MandelbrotRenderer>
 }
 
 fn get_splines() -> Splines {
@@ -85,13 +95,15 @@ struct MainState {
     limit: f64,
     center_x: f64,
     center_y: f64,
-    render: opencl::OCLMandelbrot
+    cur_renderer: u8,
+    renderers: renderers
 }
 
 impl MainState {
     fn new() -> GameResult<MainState> {
         let initial_buffer = Vec::with_capacity((WINDOW_WIDTH as usize * WINDOW_HEIGHT as usize * 4) as usize);
         let dims = (WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize);
+//        let renderers
         let s = MainState {
             fractal_buffer: initial_buffer,
             fractal_rendered: false,
@@ -99,7 +111,11 @@ impl MainState {
             zoom: ZOOM, limit: LIMIT,
             center_x: FRACTAL_CENTER_X,
             center_y: 0. - FRACTAL_CENTER_Y,
-            render: opencl::OCLMandelbrot::new(dims)
+            cur_renderer: 1,
+            renderers: renderers{
+                opencl: Box::new(opencl::OCLMandelbrot::new(dims)),
+                simd: Box::new(simd::SIMDMandelbrot::new(dims))
+            }
         };
         Ok(s)
     }
@@ -153,7 +169,12 @@ impl event::EventHandler for MainState {
             let yr = std::ops::Range{start: self.center_y - height, end: self.center_y + height};
             //let colors = generate(dims, xr, yr, iterations as usize);
             // let colors = opencl::generate(WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize, self.limit as usize).unwrap();
-            let colors = self.render.generate(dims, xr, yr, self.limit as usize).unwrap();
+            let renderer = match self.cur_renderer{
+                0 => &self.renderers.opencl,
+                1 => &self.renderers.simd,
+                _ => &self.renderers.opencl
+            };
+            let colors = renderer.render(xr, yr, self.limit as usize).unwrap();
 //            let colors = (0..(WINDOW_WIDTH  * WINDOW_HEIGHT) as usize)
 //                .into_par_iter()
 //                .map(|idx| {
@@ -245,6 +266,10 @@ impl event::EventHandler for MainState {
         }
         if keycode == KeyCode::S {
             self.center_y += 0.1 * self.zoom;
+            self.fractal_rendered = false;
+        }
+        if keycode == KeyCode::R {
+            self.cur_renderer = (1 + self.cur_renderer) % 2;
             self.fractal_rendered = false;
         }
     }

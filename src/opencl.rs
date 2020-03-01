@@ -1,36 +1,24 @@
 extern crate ocl;
 use ocl::ProQue;
 use ocl::{SpatialDims, Device, Context, Platform, Program, Buffer};
+use crate::renderer::{MandelbrotRenderer};
+use std::error::Error;
 
 pub struct OCLMandelbrot{
     queue: ProQue,
     buffer: Buffer<u64>,
     dims: (usize, usize)
 }
-impl OCLMandelbrot{
-     pub fn new(dims: (usize, usize)) -> OCLMandelbrot {
-         let platform = Platform::default();
-         let device = Device::first(platform).unwrap();
-         let src = r#"
+impl MandelbrotRenderer for OCLMandelbrot {
+    fn new(dims: (usize, usize)) -> OCLMandelbrot {
+        let platform = Platform::default();
+        let device = Device::first(platform).unwrap();
+        let src = r#"
          #pragma OPENCL EXTENSION cl_khr_fp64 : enable
-       // Used to index into the 1D array, so that we can use
-        // it effectively as a 2D array
         int index(int x, int y, int width) {
           return width*y + x;
         }
-
-        // Turn the raw x coordinates [0, 1] into a scaled x coordinate
-        // [0, 1] -> [-2, 1.25]
-        float mapX(float x) {
-          return x*3.25 - 2;
-        }
-
-        // Same purpose as mapX
-        // [0, 1] -> [-1.25, 1.25]
-        float mapY(float y) {
-          return y*2.5 - 1.25;
-        }
-
+        #pragma OPENCL EXTENSION cl_khr_fp64 : enable
         __kernel void render(__global size_t *out, float x_s, float x_e, float y_s, float y_e,  int limit) {
           int x_dim = get_global_id(0);
           int y_dim = get_global_id(1);
@@ -43,17 +31,12 @@ impl OCLMandelbrot{
 
           float x_origin = x_s + dx * x_dim;
           float y_origin = y_s + dy * y_dim;
-          //float x_origin = mapX((float) x_dim / width);
-          //float y_origin = mapY((float) y_dim / height);
 
-          // The Escape time algorithm, it follows the pseduocode from Wikipedia
-          // _very_ closely
           float x = 0.0;
           float y = 0.0;
 
           int iteration = 0;
 
-          // This can be changed, to be more or less precise
           int max_iteration = limit;
           while(x*x + y*y <= 4 && iteration < max_iteration) {
             float xtemp = x*x - y*y + x_origin;
@@ -63,14 +46,10 @@ impl OCLMandelbrot{
           }
 
           if(iteration == max_iteration) {
-            // This coordinate did not escape, so it is in the Mandelbrot set
             out[idx] = max_iteration;
           } else {
-            // This coordinate did escape, so color based on quickly it escaped
             out[idx] = iteration;
-
           }
-
         }
     "#;
 
@@ -91,15 +70,15 @@ impl OCLMandelbrot{
             .src(src)
             .dims(dims.0*dims.1)
             .build().unwrap();
-         dbg!(pro_que.device());
-         let buffer = pro_que.create_buffer::<u64>().unwrap();
+        dbg!(pro_que.device());
+        let buffer = pro_que.create_buffer::<u64>().unwrap();
         OCLMandelbrot{
             queue: pro_que,
             dims,
             buffer
         }
     }
-    pub fn generate(&self, dims: (usize, usize), xr: std::ops::Range<f64>, yr: std::ops::Range<f64>, limit: usize) -> ocl::Result<Vec<u64>> {
+    fn render(&self, xr: std::ops::Range<f64>, yr: std::ops::Range<f64>, limit: usize) ->Result<Vec<u64>, Box<Error>> {
         //println!("xr=({},{}), yr=({},{}), limit={}", xr.start, xr.end, yr.start, yr.end, limit);
         let mut kernel = self.queue.kernel_builder("render")
             .arg(&self.buffer)
@@ -108,19 +87,25 @@ impl OCLMandelbrot{
             .arg(yr.start as f32)
             .arg(yr.end as f32)
             .arg(limit as i32)
-            .build()?;
+            .build().expect("cant render");
 
         kernel.set_default_global_work_size(SpatialDims::Two(self.dims.0,self.dims.1));
 
-        unsafe { kernel.enq()?; }
+        unsafe { kernel.enq().expect("cant render"); }
 
         let mut vec = vec![0u64; self.buffer.len()];
-        self.buffer.read(&mut vec).enq()?;
+        self.buffer.read(&mut vec).enq().expect("cant render");
 
         Ok(vec)
     }
-
 }
+
+
+//
+//impl OCLMandelbrot{
+//
+//
+//}
 
 
 #[cfg(test)]
