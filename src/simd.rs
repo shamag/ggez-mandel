@@ -16,7 +16,6 @@ struct Complexx8 {
 impl Complexx8 {
     #[inline]
     fn escapes(self, threshold: f64, limit: usize) -> u64x8 {
-        //let Self { real: x, imag: y, threshold , limit} = *self;
         let mut count = u64x8::splat(0);
         let mut z = self;
         for _ in 0..limit {
@@ -47,9 +46,7 @@ impl Complexx8 {
         let new_x = c_x + (xx - yy);
         let new_y = c_y + (xy + xy);
 
-        return Complexx8 { real: new_x, imag: new_y};
-
-        //Sself.current)
+        Complexx8 { real: new_x, imag: new_y}
     }
 }
 

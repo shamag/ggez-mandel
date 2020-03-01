@@ -70,7 +70,7 @@ impl MandelbrotRenderer for OCLMandelbrot {
             .src(src)
             .dims(dims.0*dims.1)
             .build().unwrap();
-        dbg!(pro_que.device());
+        dbg!(pro_que.device().name());
         let buffer = pro_que.create_buffer::<u64>().unwrap();
         OCLMandelbrot{
             queue: pro_que,

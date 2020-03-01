@@ -4,6 +4,8 @@ mod lib;
 mod opencl;
 mod renderer;
 mod simd;
+mod single;
+mod multi;
 
 use rgsl;
 use ggez;
@@ -20,6 +22,7 @@ use rgsl::{Spline, InterpAccel};
 use renderer::*;
 use crate::simd::SIMDMandelbrot;
 use crate::opencl::OCLMandelbrot;
+use crate::single::SingleMandelbrot;
 
 struct Splines {
     r: Spline,
@@ -32,7 +35,9 @@ struct Splines {
 
 struct renderers {
     opencl: Box<MandelbrotRenderer>,
-    simd: Box<MandelbrotRenderer>
+    simd: Box<MandelbrotRenderer>,
+    single: Box<MandelbrotRenderer>,
+    multi: Box<MandelbrotRenderer>
 }
 
 fn get_splines() -> Splines {
@@ -114,7 +119,9 @@ impl MainState {
             cur_renderer: 1,
             renderers: renderers{
                 opencl: Box::new(opencl::OCLMandelbrot::new(dims)),
-                simd: Box::new(simd::SIMDMandelbrot::new(dims))
+                simd: Box::new(simd::SIMDMandelbrot::new(dims)),
+                single: Box::new(single::SingleMandelbrot::new(dims)),
+                multi: Box::new(multi::MultiMandelbrot::new(dims))
             }
         };
         Ok(s)
@@ -172,7 +179,8 @@ impl event::EventHandler for MainState {
             let renderer = match self.cur_renderer{
                 0 => &self.renderers.opencl,
                 1 => &self.renderers.simd,
-                _ => &self.renderers.opencl
+                2 => &self.renderers.single,
+                _ => &self.renderers.multi,
             };
             let colors = renderer.render(xr, yr, self.limit as usize).unwrap();
 //            let colors = (0..(WINDOW_WIDTH  * WINDOW_HEIGHT) as usize)
@@ -269,7 +277,7 @@ impl event::EventHandler for MainState {
             self.fractal_rendered = false;
         }
         if keycode == KeyCode::R {
-            self.cur_renderer = (1 + self.cur_renderer) % 2;
+            self.cur_renderer = (1 + self.cur_renderer) % 4;
             self.fractal_rendered = false;
         }
     }

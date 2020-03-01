@@ -1,5 +1,4 @@
 use num::Complex;
-use packed_simd::*;
 use std::{io, ops};
 use rayon::prelude::*;
 
