@@ -26,7 +26,7 @@ impl MandelbrotRenderer for MultiMandelbrot {
     fn new(dims: (usize, usize)) -> MultiMandelbrot {
         MultiMandelbrot { dims }
     }
-    fn render(&self, xr: std::ops::Range<f64>, yr: std::ops::Range<f64>, limit: usize) -> Result<Vec<u64>, Box<Error>> {
+    fn render(&self, xr: std::ops::Range<f64>, yr: std::ops::Range<f64>, limit: usize) -> Result<Vec<u64>, Box<dyn Error>> {
         let (width, height) = self.dims;
         let colors = (0..(width * height) as usize)
             .into_par_iter()

@@ -1,7 +1,8 @@
 extern crate ocl;
+
 use ocl::ProQue;
-use ocl::{SpatialDims, Device, Context, Platform, Program, Buffer};
-use crate::renderer::{MandelbrotRenderer};
+use ocl::{SpatialDims, Device, Platform, Buffer};
+use super::renderer::{MandelbrotRenderer};
 use std::error::Error;
 
 pub struct OCLMandelbrot{
@@ -54,15 +55,6 @@ impl MandelbrotRenderer for OCLMandelbrot {
     "#;
 
 
-        let context = Context::builder()
-            .platform(platform)
-            .devices(device.clone())
-            .build().unwrap();
-
-        let program = Program::builder()
-            .devices(device)
-            .src(src)
-            .build(&context).unwrap();
 
         let pro_que = ProQue::builder()
             .platform(platform)
@@ -70,7 +62,7 @@ impl MandelbrotRenderer for OCLMandelbrot {
             .src(src)
             .dims(dims.0*dims.1)
             .build().unwrap();
-        dbg!(pro_que.device().name());
+//        dbg!(pro_que.device().name());
         let buffer = pro_que.create_buffer::<u64>().unwrap();
         OCLMandelbrot{
             queue: pro_que,
@@ -78,7 +70,7 @@ impl MandelbrotRenderer for OCLMandelbrot {
             buffer
         }
     }
-    fn render(&self, xr: std::ops::Range<f64>, yr: std::ops::Range<f64>, limit: usize) ->Result<Vec<u64>, Box<Error>> {
+    fn render(&self, xr: std::ops::Range<f64>, yr: std::ops::Range<f64>, limit: usize) ->Result<Vec<u64>, Box<dyn Error>> {
         //println!("xr=({},{}), yr=({},{}), limit={}", xr.start, xr.end, yr.start, yr.end, limit);
         let mut kernel = self.queue.kernel_builder("render")
             .arg(&self.buffer)
@@ -101,22 +93,16 @@ impl MandelbrotRenderer for OCLMandelbrot {
 }
 
 
-//
-//impl OCLMandelbrot{
-//
-//
+
+//#[cfg(test)]
+//mod test {
+//    use super::*;
+//    #[test]
+//    fn test_add() {
+//        let renderer= OCLMandelbrot::new((300, 300));
+//        let dims = (2000, 2000);
+//        let xr = std::ops::Range{start: -1., end: -2.};
+//        let yr = std::ops::Range{start: -1., end: -2.};
+//        assert_eq!(renderer.generate(dims, xr, yr, 100).expect("error"), vec![1,1]);
+//    }
 //}
-
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    #[test]
-    fn test_add() {
-        let renderer= OCLMandelbrot::new((300, 300));
-        let dims = (2000, 2000);
-        let xr = std::ops::Range{start: -1., end: -2.};
-        let yr = std::ops::Range{start: -1., end: -2.};
-        assert_eq!(renderer.generate(dims, xr, yr, 100).expect("error"), vec![1,1]);
-    }
-}

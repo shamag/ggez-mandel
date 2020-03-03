@@ -1,6 +1,5 @@
 //! The simplest possible example that does something.
 mod constants;
-mod lib;
 mod opencl;
 mod renderer;
 mod simd;
@@ -15,14 +14,9 @@ use ggez::timer;
 use ggez::nalgebra as na;
 use ggez::{conf::*, Context, GameResult, mint,  graphics::*, event::*};
 use constants::*;
-use rayon::prelude::*;
-use num::Complex;
-//use lib::{escapes, generate};
 use rgsl::{Spline, InterpAccel};
 use renderer::*;
-use crate::simd::SIMDMandelbrot;
-use crate::opencl::OCLMandelbrot;
-use crate::single::SingleMandelbrot;
+
 
 struct Splines {
     r: Spline,
@@ -33,11 +27,11 @@ struct Splines {
     ba: InterpAccel,
 }
 
-struct renderers {
-    opencl: Box<MandelbrotRenderer>,
-    simd: Box<MandelbrotRenderer>,
-    single: Box<MandelbrotRenderer>,
-    multi: Box<MandelbrotRenderer>
+struct Renderers {
+    opencl: Box<dyn MandelbrotRenderer>,
+    simd: Box<dyn MandelbrotRenderer>,
+    single: Box<dyn MandelbrotRenderer>,
+    multi: Box<dyn MandelbrotRenderer>
 }
 
 fn get_splines() -> Splines {
@@ -71,9 +65,9 @@ fn get_splines() -> Splines {
         b[i] = palette2[i][2] as f64;
     }
 
-    let mut acc_r = rgsl::InterpAccel::new();
-    let mut acc_g = rgsl::InterpAccel::new();
-    let mut acc_b = rgsl::InterpAccel::new();
+    let acc_r = rgsl::InterpAccel::new();
+    let acc_g = rgsl::InterpAccel::new();
+    let acc_b = rgsl::InterpAccel::new();
     let spline_r = rgsl::Spline::new(&rgsl::InterpType::cspline(), 16).unwrap();
     let spline_g = rgsl::Spline::new(&rgsl::InterpType::cspline(), 16).unwrap();
     let spline_b = rgsl::Spline::new(&rgsl::InterpType::cspline(), 16).unwrap();
@@ -101,14 +95,13 @@ struct MainState {
     center_x: f64,
     center_y: f64,
     cur_renderer: u8,
-    renderers: renderers
+    renderers: Renderers
 }
 
 impl MainState {
     fn new() -> GameResult<MainState> {
         let initial_buffer = Vec::with_capacity((WINDOW_WIDTH as usize * WINDOW_HEIGHT as usize * 4) as usize);
         let dims = (WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize);
-//        let renderers
         let s = MainState {
             fractal_buffer: initial_buffer,
             fractal_rendered: false,
@@ -117,7 +110,7 @@ impl MainState {
             center_x: FRACTAL_CENTER_X,
             center_y: 0. - FRACTAL_CENTER_Y,
             cur_renderer: 1,
-            renderers: renderers{
+            renderers: Renderers{
                 opencl: Box::new(opencl::OCLMandelbrot::new(dims)),
                 simd: Box::new(simd::SIMDMandelbrot::new(dims)),
                 single: Box::new(single::SingleMandelbrot::new(dims)),
@@ -157,83 +150,48 @@ impl event::EventHandler for MainState {
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
+        // очищаем
         graphics::clear(ctx, [0.0, 0.0, 0.0, 1.0].into());
+        // расчитываем переменные
         let ratio = WINDOW_WIDTH as f64 / WINDOW_HEIGHT as f64;
         let zoom = self.zoom;
-        let center_x = self.center_x;
-        let center_y = self.center_y;
         let width = zoom /2.0;
-        let mut height = zoom /2.0/ratio;
-        //println!("zoom {}", zoom);
-        height = height;
-        let min_x = center_x - (zoom / 2.0);
-        let min_y = center_y - (zoom / 2.0 / ratio);
-        let max_y = center_y + (zoom / 2.0 / ratio);
+        let height = zoom /2.0/ratio;
         let iterations = self.limit;
+
+        // переасчитываем множество только если надо
         if !self.fractal_rendered {
-            let dims = (WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize);
             let xr = std::ops::Range{start: self.center_x - width, end: self.center_x + width};
             let yr = std::ops::Range{start: self.center_y - height, end: self.center_y + height};
-            //let colors = generate(dims, xr, yr, iterations as usize);
-            // let colors = opencl::generate(WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize, self.limit as usize).unwrap();
+            // выбираем способ расчета
             let renderer = match self.cur_renderer{
                 0 => &self.renderers.opencl,
                 1 => &self.renderers.simd,
                 2 => &self.renderers.single,
                 _ => &self.renderers.multi,
             };
-            let colors = renderer.render(xr, yr, self.limit as usize).unwrap();
-//            let colors = (0..(WINDOW_WIDTH  * WINDOW_HEIGHT) as usize)
-//                .into_par_iter()
-//                .map(|idx| {
-//                    let x = idx % (WINDOW_WIDTH as usize );
-//                    let y = idx / (WINDOW_WIDTH as usize);
-//                    let point = Complex{re: min_x + x as f64 / WINDOW_WIDTH as f64 * zoom, im: min_y + y as f64 / WINDOW_HEIGHT as f64 * zoom / ratio};
-//                    escapes(
-//                        point,
-//                        iterations as u32,
-//                    )
-//                })
-//                .collect::<Vec<Option<usize>>>();
-            let mut max = 0 as u64;
-            let mut min = std::u64::MAX;
 
-            colors.iter().for_each(|color| {
-                let wrapped = Some(color);
-                match wrapped {
-                    None => {},
-                    Some(num) => {
-                        if *num > max {
-                            max = *num;
-                        }
-                        if *num < min {
-                            min = *num;
-                        }
-                    }
-                }
-
-            });
-            println!("{}, {}", min, max);
-
-            let buffer= colors.iter().flat_map(|item| {
-                let max_iter = (iterations -1.0) as u64;
-                let mut wrapped = if *item < (iterations-1.0) as u64{
-                    Some(*item as usize)
-                } else {
-                    None
-                };
-
-                self.get_color(&wrapped)
-            }).collect::<Vec<u8>>();
+            let buffer= renderer.render(xr, yr, self.limit as usize).unwrap()
+                .iter()
+                .flat_map(|item| {
+                    let wrapped = if *item < (iterations-1.0) as u64{
+                        Some(*item as usize)
+                    } else {
+                        None
+                    };
+                    self.get_color(&wrapped)
+                })
+                .collect::<Vec<u8>>();
 
             self.fractal_buffer = buffer;
         }
         self.fractal_rendered = true;
+
+        // вывод изображения
         let fractal = graphics::Image::from_rgba8(
             ctx,
             WINDOW_WIDTH as u16,
             WINDOW_HEIGHT as u16,
-            //&buffer
             &self.fractal_buffer
         ).unwrap();
         let scale: mint::Vector2<f32> = mint::Vector2 { x: 1.0, y: 1.0};
@@ -243,7 +201,7 @@ impl event::EventHandler for MainState {
         graphics::present(ctx)?;
         Ok(())
     }
-    fn key_up_event(&mut self, ctx: &mut Context, keycode: KeyCode, _keymod: KeyMods) {
+    fn key_up_event(&mut self, _ctx: &mut Context, keycode: KeyCode, _keymod: KeyMods) {
         if keycode == KeyCode::Z {
             self.zoom += 0.05 * self.zoom;
             self.fractal_rendered = false;
@@ -305,7 +263,7 @@ pub fn main() -> GameResult {
         backend: Backend::default().gl().version(3, 2),
         modules: ModuleConf::default(),
     };
-    let cb = ggez::ContextBuilder::new("super_simple", "ggez").conf(app_config);
+    let cb = ggez::ContextBuilder::new("mandelbrot", "ggez").conf(app_config);
     let (ctx, event_loop) = &mut cb.build()?;
     let state = &mut MainState::new()?;
     event::run(ctx, event_loop, state)

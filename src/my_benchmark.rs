@@ -2,122 +2,44 @@
 mod lib;
 mod constants;
 mod opencl;
+mod single;
+mod renderer;
+mod multi;
+mod simd;
 
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, Fun};
-use constants::*;
-use rayon::prelude::*;
-use std::{ops};
-use num::Complex;
-use lib::{escapes, compute_mandel, generate};
-
-
-fn test_escape () {
-    let ratio = 1.0;
-    let zoom = 1.0;
-    let center_x = -1.0;
-    let center_y = 0.0;
-    let min_x = center_x - (zoom / 2.0);
-    let min_y = center_y - (zoom / 2.0 / ratio);
-    let iterations = 100;
-    let colors = (0..(2000 * 2000) as usize)
-        .into_par_iter()
-        .map(|idx| {
-            let x = idx % (2000 as usize );
-            let y = idx / (2000 as usize);
-            let point = Complex{re: min_x + x as f64 / 2000 as f64 * zoom as f64, im: min_y + y as f64 / 2000 as f64 * zoom / ratio};
-            escapes(
-                point,
-                iterations as u32,
-            )
-        })
-        .collect::<Vec<Option<usize>>>();
-}
-
-fn test_escape_simd () {
-    let dims = (1000, 1000);
-    let xr = std::ops::Range{start: -1.0, end: 0.5};
-    let yr = std::ops::Range{start: -1.0, end: 1.0};
-    let _result = generate(dims, xr, yr, 500);
-}
-
-fn test_escape_opencl (renderer: &opencl::OCLMandelbrot, dims: (usize, usize), limit: usize) {
-    let xr = std::ops::Range{start: -1.0, end: 0.5};
-    let yr = std::ops::Range{start: -1.0, end: 1.0};
-    let _result = renderer.generate(dims, xr, yr,limit);
-}
-
-//fn test_escape_simd_iter () {
-//    let dims = (2000, 2000);
-//    let xr = std::ops::Range{start: -2.0, end: 1.25};
-//    let yr = std::ops::Range{start: -1.25, end: 1.25};
-//    let _result = simd_par::generate(dims, xr, yr);
-//}
-
-fn test_escape_no_complex () {
-    let ratio = 1.0;
-    let zoom = 1.0;
-    let center_x = -1.0;
-    let center_y = 0.0;
-    let min_x = center_x - (zoom / 2.0);
-    let min_y = center_y - (zoom / 2.0 / ratio);
-    let iterations = 100;
-    let colors = (0..(2000 * 2000) as usize)
-        .into_par_iter()
-        .map(|idx| {
-            let x = idx % (2000 as usize );
-            let y = idx / (2000 as usize);
-            let point = Complex{re: min_x + x as f64 / 2000 as f64 * zoom as f64, im: min_y + y as f64 / 2000 as f64 * zoom / ratio};
-            compute_mandel(
-                min_x + x as f64 / 2000 as f64 * zoom as f64,
-                min_y + y as f64 / 2000 as f64 * zoom / ratio,
-                iterations as f64,
-            )
-        })
-        .collect::<Vec<Option<usize>>>();
-}
-
-fn test_escape_single () {
-    let ratio = 1.0;
-    let zoom = 1.0;
-    let center_x = -1.0;
-    let center_y = 0.0;
-    let min_x = center_x - (zoom / 2.0);
-    let min_y = center_y - (zoom / 2.0 / ratio);
-    let iterations = 100;
-    let colors = (0..(2000 * 2000) as usize)
-        .map(|idx| {
-            let x = idx % (2000 as usize );
-            let y = idx / (2000 as usize);
-            let point = Complex{re: min_x + x as f64 / 2000 as f64 * zoom as f64, im: min_y + y as f64 / 2000 as f64 * zoom / ratio};
-            escapes(
-                point,
-                iterations as u32,
-            )
-        })
-        .collect::<Vec<Option<usize>>>();
-}
+use single::SingleMandelbrot;
+use multi::MultiMandelbrot;
+use simd::SIMDMandelbrot;
+use opencl::OCLMandelbrot;
+use renderer::MandelbrotRenderer;
+use criterion::{criterion_group, criterion_main, Criterion, Fun};
 
 fn compare_escapes(c: &mut Criterion) {
     let dims = (1000, 1000);
-    let xr = std::ops::Range{start: -1.0, end: 0.5};
-    let yr = std::ops::Range{start: -1.0, end: 1.0};
-    let renderer= opencl::OCLMandelbrot::new(dims);
-    //let mand_slow = Fun::new("no_complex", |b,_i| b.iter(|| test_escape_no_complex()));
-    let mand_opencl = Fun::new("opencl", move |b, _i| b.iter(|| test_escape_opencl(&renderer, dims, 500)));
-    //let mand_par = Fun::new("par", |b, _i| b.iter(|| test_escape()));
-    let mand_simd = Fun::new("simd", |b, _i| b.iter(|| test_escape_simd()));
+    let limit = 200;
+    let limit2 = limit.clone();
+    let limit3 = limit.clone();
+    let limit4 = limit.clone();
+    let renderer_single= SingleMandelbrot::new(dims);
+    let renderer_opencl= OCLMandelbrot::new(dims);
+    let renderer_multi= MultiMandelbrot::new(dims);
+    let renderer_simd= SIMDMandelbrot::new(dims);
+    let mand_single = Fun::new("single", move |b, _i| b.iter(|| renderer_single.render(std::ops::Range{start: -1.0, end: 0.5}, std::ops::Range{start: -1.0, end: 1.0}, limit3)));
+    let mand_multi = Fun::new("multi", move |b, _i| b.iter(|| renderer_multi.render(std::ops::Range{start: -1.0, end: 0.5}, std::ops::Range{start: -1.0, end: 1.0}, limit2)));
+    let mand_opencl = Fun::new("opencl", move |b, _i| b.iter(|| renderer_opencl.render(std::ops::Range{start: -1.0, end: 0.5}, std::ops::Range{start: -1.0, end: 1.0}, limit)));
+    let mand_simd = Fun::new("simd", move |b, _i| b.iter(|| renderer_simd.render(std::ops::Range{start: -1.0, end: 0.5}, std::ops::Range{start: -1.0, end: 1.0}, limit4)));
 
 
-    let functions = vec![mand_opencl, mand_simd];
+    let functions = vec![mand_single, mand_multi, mand_simd, mand_opencl];
 
-    c.bench_functions("Mandelbrot", functions, 20);
+    c.bench_functions("Mandelbrot", functions, 10);
 }
 
-pub fn criterion_benchmark(c: &mut Criterion) {
-
-    c.bench_function("escapes", |b| b.iter(|| test_escape()));
-}
+//pub fn criterion_benchmark(c: &mut Criterion) {
+//
+//    c.bench_function("escapes", |b| b.iter(|| test_escape()));
+//}
 
 fn setup() -> Criterion {
     Criterion::default().sample_size(10)

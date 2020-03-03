@@ -31,11 +31,11 @@ impl Complexx8 {
                 break
             }
             count += escapes.select(u64x8::splat(1), u64x8::splat(0));
-            z = z.nextPoint(self);
+            z = z.next_point(self);
         }
         count
     }
-    fn nextPoint(self, start: Complexx8) -> Complexx8 {
+    fn next_point(self, start: Complexx8) -> Complexx8 {
         let Complexx8 { real: c_x, imag: c_y } = start;
         let Complexx8 { real: x, imag: y } = self;
 
@@ -55,7 +55,7 @@ impl MandelbrotRenderer for SIMDMandelbrot {
     fn new(dims: (usize, usize)) -> SIMDMandelbrot {
        SIMDMandelbrot{dims}
     }
-    fn render(&self, xr: std::ops::Range<f64>, yr: std::ops::Range<f64>, limit: usize) ->Result<Vec<u64>, Box<Error>> {
+    fn render(&self, xr: std::ops::Range<f64>, yr: std::ops::Range<f64>, limit: usize) ->Result<Vec<u64>, Box<dyn Error>> {
         let (width, height) = self.dims;
 
         let block_size = f64x8::lanes();
@@ -70,7 +70,6 @@ impl MandelbrotRenderer for SIMDMandelbrot {
 
         let width_in_blocks = width / block_size;
 
-        // The initial X values are the same for every row.
         let xs = unsafe {
             let dx = (xr.end - xr.start) / (width as f64);
             let mut buf: Vec<f64x8> = vec![f64x8::splat(0.); width_in_blocks];
@@ -117,15 +116,15 @@ impl MandelbrotRenderer for SIMDMandelbrot {
 
 
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    #[test]
-    fn test_add() {
-        let renderer= SIMDMandelbrot::new((300, 300));
-        let dims = (2000, 2000);
-        let xr = std::ops::Range{start: -1., end: -2.};
-        let yr = std::ops::Range{start: -1., end: -2.};
-        assert_eq!(renderer.generate(dims, xr, yr, 100).expect("error"), vec![1,1]);
-    }
-}
+//#[cfg(test)]
+//mod test {
+//    use super::*;
+//    #[test]
+//    fn test_add() {
+//        let renderer= SIMDMandelbrot::new((300, 300));
+//        let dims = (2000, 2000);
+//        let xr = std::ops::Range{start: -1., end: -2.};
+//        let yr = std::ops::Range{start: -1., end: -2.};
+//        assert_eq!(renderer.generate(dims, xr, yr, 100).expect("error"), vec![1,1]);
+//    }
+//}
